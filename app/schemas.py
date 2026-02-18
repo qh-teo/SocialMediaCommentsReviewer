@@ -25,7 +25,7 @@ class UserCreate(BaseModel):
     lastname: str = Field(min_length=1, max_length=50)
     dateOfBirth: date
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=72)
 
 class UserOut(BaseModel):
     user_id: int
@@ -40,7 +40,8 @@ class UserOut(BaseModel):
 
 class LoginRequest(BaseModel):
     username_or_email: str
-    password: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=8, max_length=72)
+
 
 class LoginResponse(BaseModel):
     ok: bool

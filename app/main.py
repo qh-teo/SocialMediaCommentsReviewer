@@ -4,8 +4,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select, or_
-
-from passlib.context import CryptContext
+from pwdlib import PasswordHash
 
 from .db import engine, get_db
 from .models import Base, Todo, User
@@ -18,7 +17,9 @@ from .schemas import (
 # Create tables (quick-project approach)
 Base.metadata.create_all(bind=engine)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_hasher = PasswordHash.recommended()
+# Dummy hash to equalize timing for non-existent users
+DUMMY_HASH = pwd_hasher.hash("dummypassword")
 
 app = FastAPI(title="Todo API", version="1.0.0")
 
@@ -106,7 +107,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
         lastname=payload.lastname,
         dateOfBirth=payload.dateOfBirth,
         email=str(payload.email),
-        password_hash=pwd_context.hash(payload.password),
+        password_hash=pwd_hasher.hash(payload.password),
     )
     db.add(user)
     db.commit()
@@ -125,7 +126,19 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.scalar(
         select(User).where(or_(User.username == payload.username_or_email, User.email == payload.username_or_email))
     )
-    if not user or not pwd_context.verify(payload.password, user.password_hash):
+    if not user:
+        # run a dummy verify to reduce timing differences
+        try:
+            pwd_hasher.verify(payload.password, DUMMY_HASH)
+        except Exception:
+            pass
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    try:
+        verified = pwd_hasher.verify(payload.password, user.password_hash)
+    except Exception:
+        verified = False
+    if not verified:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     return {"ok": True, "user": user}
